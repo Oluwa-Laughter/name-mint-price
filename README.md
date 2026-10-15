@@ -78,7 +78,7 @@ Variable names only are listed here. Local values belong in ignored environment 
 
 ### Frontend and server routes
 
-Configure these in `frontend/.env.local` locally:
+Configure these in `frontend/.env.local` locally. Upload protection uses the existing Vercel project, with no CAPTCHA or extra service keys:
 
 | Name                       | Where it is used | Purpose                                                                                                       |
 | -------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------- |
@@ -101,10 +101,17 @@ Configure these in `contracts/.env` when deploying contracts:
 | `MINT_FEE_WEI`             | Optional exact mint fee; defaults to zero.                                |
 | `MAX_PRICE_AGE_SECONDS`    | Optional maximum accepted Chainlink quote age; defaults to 7,200 seconds. |
 | `LOCAL_PRICE_FEED_ADDRESS` | Local Anvil testing only; points to a mock or forked feed.                |
+| `DIAMOND_OWNER` | Wallet or multisig that controls Diamond upgrades. |
 
-Use Foundry's encrypted keystore for the deployment wallet. Treasury and mint fee are immutable after deployment. The frontend reads the deployed fee before minting.
+Use Foundry's encrypted keystore for the deployment wallet. `DIAMOND_OWNER` controls future upgrades. The frontend reads the deployed fee before minting. Legacy standalone contracts keep their original immutable settings.
 
-## Sepolia contracts
+## Diamond upgrade
+
+The repository now includes a fresh EIP-2535 Diamond implementation with NFT, price-feed, file-registry, cut, loupe, and ownership facets. See [Diamond deployment and upgrade instructions](contracts/DIAMOND.md). The owner controls upgrades; future implementations can change behavior, so metadata and fee rules are no longer described as permanently immutable for the Diamond.
+
+Sepolia Diamond: [0xcFF92631199b6Cb3A6E99fC1e4c384A87FB2051f](https://sepolia.etherscan.io/address/0xcFF92631199b6Cb3A6E99fC1e4c384A87FB2051f#code). The frontend bindings use this single address for NFT, price-feed, and file-registry calls. All eight deployment transactions succeeded, and deployed runtime code matches the local build. The new Diamond starts a new collection; existing NFTs remain at the legacy addresses below. The frontend release is deployed through GitHub. Uploads require the Vercel firewall rule described below to be published.
+
+## Existing Sepolia contracts
 
 | Contract                | Purpose                                                                                                    | Verified source                                                                                                                    |
 | ----------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
@@ -121,9 +128,13 @@ Each project contract has a separate deployment script under `contracts/scripts/
 
 NFT Studio accepts JPEG, PNG, WebP, GIF, and PDF files up to **1,000,000 bytes (1 MB)**. Artwork and profile cards require an image; document NFTs require a PDF and receive a generated cover image.
 
-The wallet signs an upload authorization tied to the file hash, title, description, NFT kind, origin, wallet, and timestamp. `/api/upload` validates the signature, expiry, size, and file signature before calling Pinata with the server's JWT. It pins the file and JSON metadata, then returns public `ipfs://` references. The wallet separately confirms the mint transaction, which stores those references on-chain. Uploading alone does not mint an NFT. Profile cards are snapshots; editing ENS later does not change an existing NFT.
+The upload route checks Vercel's shared rate-limit service before using Pinata. Users upload without signing a wallet message or solving a CAPTCHA, then confirm one mint transaction in their wallet, paying gas once. Wallet connection and switching networks may still need permission prompts. The server validates file formats and size, pins files and metadata with its private JWT, and returns public file references. Uploading alone does not mint an NFT.
 
-The JWT stays on the server. RPC requests use `/api/rpc`, which restricts upstream networks and read/simulation methods; wallets sign and broadcast transactions. Both routes return generic provider failure messages. Wallet authorization and a file-size limit do not provide an account-wide upload quota or rate limit. A cancelled mint can leave an uploaded file pinned, and valid authorizations can be replayed within their five-minute window.
+The route uses `@vercel/firewall` with the rate-limit ID `nft-upload`. A missing rule or unavailable rate-limit service rejects uploads with 503; an exceeded limit returns 429 with a retry message. Counters are per region and use the client IP on Vercel. Local development shares a dedicated `local-development` bucket on this project's firewall. There is no durable counter stored in a server process.
+
+The firewall draft starts in observation mode: 30 requests per minute with a log action. This records traffic without enforcing that limit after it is published. Review the traffic before enforcing the recommended target of 3 uploads per minute per IP. This policy is a Vercel setting, separate from Git deployments. See [firewall rollout instructions](frontend/FIREWALL.md). IP limits reduce abuse but can be bypassed with different IPs; they do not prove wallet ownership or completion of a mint. The on-chain creator comes from the transaction sender. A cancelled mint can leave a file pinned.
+
+The JWT and private RPC configuration stay on the server. RPC requests use `/api/rpc`, which restricts upstream networks and read/simulation methods; wallets sign and broadcast transactions. Provider failures return generic messages. Profile cards are snapshots; editing ENS later does not change an existing NFT.
 
 The ETH/USD quote refreshes every 30 seconds. The UI shows its age and disables USD conversions for invalid or stale data. Refreshing the UI reads the feed; it does not cause Chainlink to publish a new round. Conversions use fixed-point bigint arithmetic.
 
@@ -146,4 +157,4 @@ forge build
 forge fmt --check
 ```
 
-With the app running, `npx tsx scripts/check-read-flows.ts` from `frontend/` checks deployed contract reads, the gallery, price, RPC proxy, and mainnet ENS. The optional `check-upload-flow.ts` script makes a real public Pinata upload and checks retrieval; it is excluded from the default tests and sends no mint transaction. Browser-wallet minting and ENS editing require a wallet and a name you control.
+With the app running, `npx tsx scripts/check-read-flows.ts` from `frontend/` checks deployed contract reads, the gallery, price, RPC proxy, and mainnet ENS. The optional `check-upload-flow.ts` script makes a real public Pinata upload, and checks retrieval; it is excluded from the default tests and sends no mint transaction. Browser-wallet minting and ENS editing require a wallet and a name you control.

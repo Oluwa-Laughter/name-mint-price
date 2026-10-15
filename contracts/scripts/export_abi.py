@@ -7,6 +7,13 @@ import subprocess
 root = Path(__file__).resolve().parents[1]
 targets = {
     "src/ClassNFT.sol:ClassNFT": "classNFTAbi",
+    "src/diamond/Diamond.sol:Diamond": "diamondAbi",
+    "src/diamond/facets/NFTFacet.sol:NFTFacet": "nftFacetAbi",
+    "src/diamond/facets/PriceFeedFacet.sol:PriceFeedFacet": "priceFeedFacetAbi",
+    "src/diamond/facets/FileRegistryFacet.sol:FileRegistryFacet": "fileRegistryFacetAbi",
+    "src/diamond/facets/DiamondCutFacet.sol:DiamondCutFacet": "diamondCutAbi",
+    "src/diamond/facets/DiamondLoupeFacet.sol:DiamondLoupeFacet": "diamondLoupeAbi",
+    "src/diamond/facets/OwnershipFacet.sol:OwnershipFacet": "ownershipFacetAbi",
     "src/IPFSFileRegistry.sol:IPFSFileRegistry": "ipfsFileRegistryAbi",
     "src/ETHUSDPriceFeed.sol:ETHUSDPriceFeed": "ethUsdPriceFeedAbi",
     "src/interfaces/AggregatorV3Interface.sol:AggregatorV3Interface": "aggregatorV3Abi",
@@ -21,9 +28,28 @@ for target, constant in targets.items():
     )
     exports.append((target.split(":")[1], constant, json.dumps(json.loads(result.stdout), indent=2)))
 
+# Combined ABI for tools that interact with the complete Diamond at one address.
+combined = []
+seen = set()
+for name, _, serialized in exports:
+    if name not in {"Diamond", "NFTFacet", "PriceFeedFacet", "FileRegistryFacet", "DiamondCutFacet", "DiamondLoupeFacet", "OwnershipFacet"}:
+        continue
+    for entry in json.loads(serialized):
+        if entry["type"] in {"constructor", "fallback", "receive"} and name != "Diamond":
+            continue
+        def abi_type(item):
+            if item["type"].startswith("tuple"):
+                return "(" + ",".join(abi_type(c) for c in item["components"]) + ")" + item["type"][5:]
+            return item["type"]
+        key = (entry["type"], entry.get("name", ""), tuple(abi_type(i) for i in entry.get("inputs", [])))
+        if key not in seen:
+            combined.append(entry)
+            seen.add(key)
+exports.append(("NameMintDiamond", "nameMintDiamondAbi", json.dumps(combined, indent=2)))
+
 output = root / "abi"
 output.mkdir(exist_ok=True)
-# The frontend is a separate Git repository in this workspace. Keep its generated
+# Keep the frontend generated
 # bindings self-contained so Vercel never needs access to ../contracts at build time.
 frontend = root.parent / "frontend"
 frontend_output = frontend / "src" / "lib" / "contracts" if (frontend / "package.json").exists() else None
@@ -46,4 +72,4 @@ if frontend_output:
         "// Generated from contracts/deployments/sepolia.json. Do not edit manually.\n"
         "export const sepoliaDeployment = " + json.dumps(deployment, indent=2) + " as const;\n"
     )
-    print("Synced all five ABIs and Sepolia deployment addresses to frontend/src/lib/contracts/")
+    print("Synced all ABIs and Sepolia deployment addresses to frontend/src/lib/contracts/")

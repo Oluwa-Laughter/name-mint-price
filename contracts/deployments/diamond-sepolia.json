@@ -1,0 +1,46 @@
+{
+  "chainId": 11155111,
+  "diamondAddress": "0xcFF92631199b6Cb3A6E99fC1e4c384A87FB2051f",
+  "deployments": [
+    {
+      "contract": "DiamondCutFacet",
+      "address": "0x8fbe7f2941b10b914d1f1241eb039d64df1d674c",
+      "transactionHash": "0x964c449e67b73bad88517be7eb658eca542cca2af00cbce913cc48ac9ac8785c"
+    },
+    {
+      "contract": "DiamondLoupeFacet",
+      "address": "0x4c8e3f5fd9b5a5caeae9c94f587690e0d00d2be6",
+      "transactionHash": "0xf9af335b4f349d62bb055ab9395efed55d0b09fb758ee9554142b6c969e527bc"
+    },
+    {
+      "contract": "OwnershipFacet",
+      "address": "0x6ff38b51491b5770fd9b4f51fac45be3ab29143e",
+      "transactionHash": "0x5db0c110f33eb19787b1f442b5817ead33e8feb35ab4e0c25c65942b77efcca5"
+    },
+    {
+      "contract": "NFTFacet",
+      "address": "0xca05c389890c52a4c76418e87174965dcbdb9b18",
+      "transactionHash": "0x55ad89f85c3e85f0d9b94e1e23a2f2c10a3e2246d097a395691ffdd74b57422a"
+    },
+    {
+      "contract": "PriceFeedFacet",
+      "address": "0x42eaf0984d33ade646a0048084f4c17f5843279b",
+      "transactionHash": "0xd22b1a63d720a776ac1893fe08b351911815b023784e6343d57db435e9212799"
+    },
+    {
+      "contract": "FileRegistryFacet",
+      "address": "0x9433f40402a6a8cf90f5a884b99473bb1e378513",
+      "transactionHash": "0x531f3883c00e4992f30cb7c362e69bfdde081f09fe3f5c2d898c01a965b1de25"
+    },
+    {
+      "contract": "DiamondInit",
+      "address": "0xbd006b0faae61c78f79c801da77d1624f2be540c",
+      "transactionHash": "0xd8580ea1dc39b54bcd3a953fe69a2b2dbcd29906b30b90a2ceb619236b2da998"
+    },
+    {
+      "contract": "Diamond",
+      "address": "0xcff92631199b6cb3a6e99fc1e4c384a87fb2051f",
+      "transactionHash": "0xd1415b3de3604609551b8e8fa3994ddc75e8259059f2c99a468ff4b9c0fc54b7"
+    }
+  ]
+}

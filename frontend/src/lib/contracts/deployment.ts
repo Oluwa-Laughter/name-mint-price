@@ -6,5 +6,6 @@ export const sepoliaDeployment = {
     "IPFSFileRegistry": "0xE846664f9CC57c1a7c7163Ae816Cb1c592B2D3e6",
     "ETHUSDPriceFeed": "0x40b91a2b97538B1f9Bd8994EC621E839470b6345"
   },
-  "chainlinkEthUsdAggregator": "0x694AA1769357215DE4FAC081bf1f309aDC325306"
+  "chainlinkEthUsdAggregator": "0x694AA1769357215DE4FAC081bf1f309aDC325306",
+  "diamondAddress": "0xcFF92631199b6Cb3A6E99fC1e4c384A87FB2051f"
 } as const;

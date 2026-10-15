@@ -15,4 +15,4 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Keep `PINATA_JWT`, `SEPOLIA_RPC_URL`, and `MAINNET_RPC_URL` server-only. The only public environment variable is `NEXT_PUBLIC_IPFS_GATEWAY`. Never commit local environment files.
+Keep `PINATA_JWT`, `SEPOLIA_RPC_URL`, and `MAINNET_RPC_URL` server-only. The only public variable is `NEXT_PUBLIC_IPFS_GATEWAY`. Uploads use Vercel's shared rate limiter instead of a wallet message signature, then ask for one mint transaction confirmation. No CAPTCHA keys are needed. Publish the `nft-upload` firewall rule before testing uploads; see [firewall setup](FIREWALL.md). Never commit local environment files.

@@ -24,17 +24,3 @@ export function mediaUrl(value: unknown): string | null {
 
 export type UploadKind = "artwork" | "profile" | "document";
 export type PinnedAsset = { fileURI: string; metadataURI: string; imageURI: string; mimeType: string; name: string };
-export function uploadMessage(input: { origin: string; address: string; digest: string; kind: UploadKind; name: string; description: string; timestamp: number }) {
-  return [
-    "Name & Mint: authorize an NFT upload",
-    `Origin: ${input.origin}`,
-    `Wallet: ${input.address.toLowerCase()}`,
-    `File SHA-256: ${input.digest}`,
-    `Kind: ${input.kind}`,
-    `Name: ${JSON.stringify(input.name)}`,
-    `Description: ${JSON.stringify(input.description)}`,
-    `Timestamp: ${input.timestamp}`,
-    "The selected file and NFT details will be published.",
-    "This signature does not send a blockchain transaction or grant token approvals.",
-  ].join("\n");
-}

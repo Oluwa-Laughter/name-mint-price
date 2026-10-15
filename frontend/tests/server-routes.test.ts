@@ -1,14 +1,15 @@
 import { afterEach, beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+import { uploadAsset } from "../src/lib/upload";
 import { POST as upload } from "../src/app/api/upload/route";
 import { POST as rpc } from "../src/app/api/rpc/route";
-import { uploadMessage, ipfsUrl, mediaUrl, MAX_NFT_IMAGE_BYTES, type UploadKind } from "../src/lib/ipfs";
+import { ipfsUrl, mediaUrl, MAX_NFT_IMAGE_BYTES } from "../src/lib/ipfs";
 
 const originalFetch = globalThis.fetch;
 const originalJWT = process.env.PINATA_JWT;
 const originalRPC = process.env.SEPOLIA_RPC_URL;
+let rateStatus: number;
 const account = privateKeyToAccount(generatePrivateKey());
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aT6sAAAAASUVORK5CYII=", "base64");
 const cid = "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3f7q4wz7xrb2k56pcj3w3x2gy";
@@ -18,12 +19,16 @@ beforeEach(() => {
   process.env.PINATA_JWT = "test-only-pinata-token";
   process.env.SEPOLIA_RPC_URL = "https://rpc.example.invalid";
   uploads = [];
+  rateStatus = 204;
   globalThis.fetch = async (input, init) => {
+    if (String(input).includes("/.well-known/vercel/rate-limit-api/nft-upload")) {
+      return new Response(null, { status: rateStatus });
+    }
     if (String(input) === "https://uploads.pinata.cloud/v3/files") {
       uploads.push({ body: init?.body as FormData, authorization: new Headers(init?.headers).get("authorization") });
       return Response.json({ data: { cid } });
     }
-    // Invalid EOA signatures may fall back to the on-chain verifier; it must reject here.
+    // Any other mocked RPC call.
     return Response.json({ jsonrpc: "2.0", id: 1, result: "0x00" });
   };
 });
@@ -33,21 +38,16 @@ afterEach(() => {
   if (originalRPC === undefined) delete process.env.SEPOLIA_RPC_URL; else process.env.SEPOLIA_RPC_URL = originalRPC;
 });
 
-async function request(options: { kind?: "file" | "profile" | "artwork" | "document"; body?: Buffer; timestamp?: number; tamperName?: boolean; origin?: string } = {}) {
+async function request(options: { kind?: "file" | "profile" | "artwork" | "document"; body?: Buffer; origin?: string } = {}) {
   const bytes = options.body || png;
   const kind = options.kind || "artwork";
-  const timestamp = options.timestamp || Date.now();
-  const name = "Test card";
-  const description = "Public test bio";
-  const digest = createHash("sha256").update(bytes).digest("hex");
-  const signature = await account.signMessage({ message: uploadMessage({ origin: "http://localhost:3000", address: account.address, digest, kind: kind as UploadKind, name, description, timestamp }) });
   const body = new FormData();
-  for (const [key, value] of Object.entries({ kind, name: options.tamperName ? "Tampered title" : name, description, address: account.address, signature, timestamp: String(timestamp) })) body.set(key, value);
+  for (const [key, value] of Object.entries({ kind, name: "Test card", description: "Public test bio", address: account.address })) body.set(key, value);
   body.set("file", new File([new Uint8Array(bytes)], "test.png", { type: "image/png" }));
   return new Request("http://localhost:3000/api/upload", { method: "POST", headers: { Origin: options.origin || "http://localhost:3000" }, body });
 }
 
-test("authorized NFT upload pins a public image and matching JSON; credentials stay server-side", async () => {
+test("rate-limited NFT upload without a wallet signature pins a public image and matching JSON; credentials stay server-side", async () => {
   const response = await upload(await request({ kind: "profile" }));
   assert.equal(response.status, 200);
   const result = await response.json();
@@ -72,16 +72,27 @@ test("standalone file uploads are rejected before calling Pinata", async () => {
   assert.match((await response.json()).error, /only available when creating an NFT/);
 });
 
-test("expired requests never reach Pinata", async () => {
-  const response = await upload(await request({ timestamp: Date.now() - 6 * 60_000 }));
-  assert.equal(response.status, 401);
+test("rate-limited requests return 429 before using Pinata", async () => {
+  rateStatus = 429;
+  const response = await upload(await request());
+  assert.equal(response.status, 429);
+  assert.equal(response.headers.get("retry-after"), "60");
   assert.equal(uploads.length, 0);
 });
 
-test("a signature cannot be reused with changed metadata", async () => {
-  const response = await upload(await request({ tamperName: true }));
-  assert.equal(response.status, 401);
+test("an unpublished rate-limit rule fails closed", async () => {
+  rateStatus = 404;
+  const response = await upload(await request());
+  assert.equal(response.status, 503);
   assert.equal(uploads.length, 0);
+});
+
+test("rate-limit provider failures never reach Pinata or leak diagnostics", async () => {
+  globalThis.fetch = async () => { throw new Error("private rate-limit diagnostics"); };
+  const response = await upload(await request());
+  assert.equal(response.status, 503);
+  assert.equal(uploads.length, 0);
+  assert.doesNotMatch(JSON.stringify(await response.json()), /private rate-limit diagnostics/);
 });
 
 test("a cross-origin request cannot spend the Pinata account quota", async () => {
@@ -110,7 +121,8 @@ test("missing Pinata configuration has an actionable error without exposing conf
 });
 
 test("an upstream Pinata failure cannot be mistaken for a successful mint-ready upload", async () => {
-  globalThis.fetch = async () => Response.json({ error: "private provider diagnostics" }, { status: 403 });
+  globalThis.fetch = async (input) => String(input).includes("/.well-known/vercel/rate-limit-api/")
+    ? new Response(null, { status: 204 }) : Response.json({ error: "private provider diagnostics" }, { status: 403 });
   const response = await upload(await request());
   assert.equal(response.status, 502);
   assert.doesNotMatch(JSON.stringify(await response.json()), /private provider diagnostics|test-only-pinata-token/);
@@ -205,4 +217,27 @@ test("profile and image uploads cannot accept PDFs, and documents cannot accept 
   }
   assert.equal((await upload(await request({ kind: "document" }))).status, 400);
   assert.equal(uploads.length, 0);
+});
+
+
+test("browser upload calls only the app server and never requests a wallet signature", async () => {
+  let calls = 0;
+  globalThis.fetch = async (input, init) => {
+    ++calls;
+    assert.equal(input, "/api/upload");
+    const form = init?.body as FormData;
+    assert.equal(form.has("botToken"), false);
+    assert.equal(form.has("signature"), false);
+    assert.equal(form.has("timestamp"), false);
+    return Response.json({ fileURI: `ipfs://${cid}`, imageURI: `ipfs://${cid}`, metadataURI: `ipfs://${cid}`, mimeType: "image/png", name: "Card" });
+  };
+  await uploadAsset({ file: new File([png], "card.png", { type: "image/png" }), kind: "artwork", name: "Card", description: "", address: account.address,
+    phase: () => {} });
+  assert.equal(calls, 1);
+});
+
+
+test("a firewall HTML 429 produces a useful client error", async () => {
+  globalThis.fetch = async () => new Response("<html>rate limited</html>", { status: 429, headers: { "Content-Type": "text/html" } });
+  await assert.rejects(uploadAsset({ file: new File([png], "card.png", { type: "image/png" }), kind: "artwork", name: "Card", description: "", address: account.address, phase: () => {} }), /Too many uploads/);
 });

@@ -1,5 +1,7 @@
 # Name & Mint contracts
 
+For the new upgradeable implementation, use the [Diamond deployment and upgrade guide](DIAMOND.md). It replaces the three separate application addresses with one router and six facets. The commands below describe the legacy standalone contracts.
+
 Solidity 0.8.24 contracts built with Foundry and OpenZeppelin Contracts 5.4.0. The [repository README](../README.md) lists deployed Sepolia addresses, environment variable names, and the complete app setup.
 
 | Contract | Deployment script | Constructor |

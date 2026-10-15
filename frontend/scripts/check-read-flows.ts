@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createPublicClient, http } from "viem";
 import { mainnet, sepolia } from "viem/chains";
 import { normalize } from "viem/ens";
-import { sepoliaContracts } from "../src/lib/contracts";
+import { sepoliaContracts, DIAMOND_ADDRESS } from "../src/lib/contracts";
 
 async function main() {
 const base = process.env.APP_URL || "http://localhost:3000";
@@ -14,7 +14,12 @@ const [price, supply, files] = await Promise.all([
   client.readContract({ ...sepoliaContracts.ipfsFileRegistry, functionName: "fileCount" }),
 ]);
 assert.equal(typeof price.answer, "bigint");
-console.log("Sepolia RPC proxy: correct network; all three deployed contracts readable");
+if (DIAMOND_ADDRESS) {
+  assert.equal(sepoliaContracts.classNFT.address, DIAMOND_ADDRESS);
+  assert.equal(sepoliaContracts.ethUsdPriceFeed.address, DIAMOND_ADDRESS);
+  assert.equal(sepoliaContracts.ipfsFileRegistry.address, DIAMOND_ADDRESS);
+}
+console.log(DIAMOND_ADDRESS ? "Sepolia RPC proxy: Diamond NFT, price and registry reads passed at one address" : "Sepolia RPC proxy: legacy application reads passed");
 console.log(`Chainlink: valid=${price.valid}, stale=${price.stale}, age=${price.age.toString()}s; NFT supply=${supply}; files=${files}`);
 const [[nfts], [records]] = await Promise.all([
   client.readContract({ ...sepoliaContracts.classNFT, functionName: "getTokens", args: [BigInt(0), BigInt(12)] }),

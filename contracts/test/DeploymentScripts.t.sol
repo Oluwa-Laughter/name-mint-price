@@ -43,10 +43,12 @@ contract DeploymentScriptsTest is Test {
         vm.chainId(31337);
         MockV3Aggregator mock = new MockV3Aggregator(8);
         vm.setEnv("LOCAL_PRICE_FEED_ADDRESS", vm.toString(address(mock)));
-        vm.setEnv("MAX_PRICE_AGE_SECONDS", "600");
+        // Environment variables are process-wide in Foundry. Match the other script test
+        // so parallel tests cannot overwrite a different freshness configuration.
+        vm.setEnv("MAX_PRICE_AGE_SECONDS", "7200");
         ETHUSDPriceFeed consumer = (new DeployETHUSDPriceFeed()).run();
         assertEq(address(consumer.feed()), address(mock));
-        assertEq(consumer.maxPriceAge(), 600);
+        assertEq(consumer.maxPriceAge(), 7200);
     }
 
     function test_AllScriptsRejectOtherNetworks() public {

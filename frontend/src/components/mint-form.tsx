@@ -1,6 +1,6 @@
 "use client";
 import { useState, type FormEvent } from "react";
-import { useConnection, useSignMessage, useWriteContract } from "wagmi";
+import { useConnection, useWriteContract } from "wagmi";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { decodeEventLog } from "viem";
 import { sepoliaClient } from "@/lib/clients";
@@ -18,7 +18,6 @@ import { AddressText } from "./address";
 export function MintForm({ kind: initialKind = "artwork" }: { kind?: UploadKind }) {
   const [kind, setKind] = useState<UploadKind>(initialKind);
   const { address } = useConnection();
-  const { mutateAsync: signMessage } = useSignMessage();
   const { mutateAsync: writeContract } = useWriteContract();
   const cache = useQueryClient();
   const price = usePrice();
@@ -49,7 +48,7 @@ export function MintForm({ kind: initialKind = "artwork" }: { kind?: UploadKind 
       // Check the recipient and mint call before uploading. Use a placeholder URI only for this read-only simulation.
       await sepoliaClient.simulateContract({ ...sepoliaContracts.classNFT, functionName: "mint", args: [to, "ipfs://preflight-metadata", "ipfs://preflight-image"], value: mintFee, account: address });
       if (!uploaded) {
-        uploaded = await uploadAsset({ file, kind, name, description, address, phase: setPhase, sign: (message) => signMessage({ message, account: address }) });
+        uploaded = await uploadAsset({ file, kind, name, description, address, phase: setPhase });
         setPinned({ file, fingerprint, asset: uploaded });
       }
       if (!uploaded.metadataURI) throw new Error("NFT details are missing. Upload the file again.");
@@ -73,11 +72,11 @@ export function MintForm({ kind: initialKind = "artwork" }: { kind?: UploadKind 
       <div className="field"><label htmlFor="nft-kind">What are you minting?</label><select id="nft-kind" name="nft-kind" value={kind} onChange={(event) => { setKind(event.target.value as UploadKind); setFile(null); }}><option value="artwork">Image / artwork</option><option value="profile">Profile card</option><option value="document">Certificate / PDF document</option></select></div>
       <FilePicker key={kind} id={`mint-file-${kind}`} file={file} onChange={setFile} document={kind === "document"} />
       <div className="field"><label htmlFor={`mint-name-${kind}`}>{kind === "profile" ? "Card name" : "NFT name"}</label><input id={`mint-name-${kind}`} name="name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required placeholder={kind === "profile" ? "My profile card" : "Give your piece a name"} /></div>
-      <div className="field"><label htmlFor={`mint-bio-${kind}`}>{kind === "profile" ? "Bio" : "Description"}</label><textarea id={`mint-bio-${kind}`} name="description" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={1000} rows={3} required={kind === "profile"} /><span className="hint">{description.length} / 1,000 characters. These details become part of your NFT and cannot be changed after minting.</span></div>
+      <div className="field"><label htmlFor={`mint-bio-${kind}`}>{kind === "profile" ? "Bio" : "Description"}</label><textarea id={`mint-bio-${kind}`} name="description" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={1000} rows={3} required={kind === "profile"} /><span className="hint">{description.length} / 1,000 characters. These details become part of your NFT. The current contract provides no editing feature.</span></div>
       <div className="field"><label htmlFor={`mint-recipient-${kind}`}>Recipient <span className="muted">(optional)</span></label><input id={`mint-recipient-${kind}`} name="recipient" value={recipient} onChange={(e) => setRecipient(e.target.value)} placeholder="Your wallet, or a Sepolia ENS name / address" autoCapitalize="none" autoCorrect="off" spellCheck={false} /><span className="hint">Leave blank to mint to your connected wallet. ENS recipients are resolved on Sepolia.</span></div>
       {address && !recipient.trim() && <p className="muted">Minting to <AddressText address={address} /></p>}
       <div className="cost-row"><span>Mint payment</span><strong>{fee.data !== undefined ? `${eth(fee.data)} ETH${feeUsd !== null ? ` · ${usd(feeUsd)}` : ""}` : fee.isError ? "Fee unavailable" : "Loading…"}</strong></div>
-      <p className="hint">Network gas is extra and shown by your wallet. The USD conversion is illustrative for Sepolia ETH.</p>
+      <p className="hint">You confirm one mint transaction in your wallet. Uploading costs no gas; network gas is shown by your wallet. The USD conversion is illustrative for Sepolia ETH.</p>
       <button type="submit" className="button primary" disabled={!address || fee.isPending || fee.isError || alreadyMinted || !file || !file.size || file.size > MAX_NFT_IMAGE_BYTES}>{tx.busy ? "Mint in progress…" : alreadyMinted ? "Mint confirmed" : kind === "profile" ? "Make my card" : "Upload and mint NFT"}</button>
       {!address && <p className="hint">Connect a wallet from the navigation to continue.</p>}
       {fee.isError && <button type="button" className="text-button" onClick={() => void fee.refetch()}>Retry loading mint fee</button>}

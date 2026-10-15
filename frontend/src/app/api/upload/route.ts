@@ -1,7 +1,6 @@
-import { createHash } from "node:crypto";
-import { isAddress, type Hex } from "viem";
-import { MAX_NFT_IMAGE_BYTES, imageTypes, uploadMessage, type UploadKind } from "@/lib/ipfs";
-import { serverSepoliaClient } from "@/lib/server/rpc";
+import { enforceUploadRateLimit } from "@/lib/server/upload-rate-limit";
+import { isAddress } from "viem";
+import { MAX_NFT_IMAGE_BYTES, imageTypes, type UploadKind } from "@/lib/ipfs";
 
 export const maxDuration = 60;
 
@@ -47,8 +46,6 @@ export async function POST(request: Request) {
     const form = await request.formData();
     const file = form.get("file");
     const address = String(form.get("address") || "");
-    const signature = String(form.get("signature") || "");
-    const timestamp = Number(form.get("timestamp"));
     const kind = String(form.get("kind")) as UploadKind;
     const name = String(form.get("name") || "").trim();
     const description = String(form.get("description") || "").trim();
@@ -56,14 +53,12 @@ export async function POST(request: Request) {
     const maxBytes = MAX_NFT_IMAGE_BYTES;
     if (!(file instanceof File) || !file.size || file.size > maxBytes) return Response.json({ error: "NFT files must be 1 MB (1,000,000 bytes) or smaller." }, { status: 400 });
     if (!name || name.length > 80 || description.length > 1000) return Response.json({ error: "Use a name up to 80 characters and a description up to 1,000 characters." }, { status: 400 });
-    if (!isAddress(address) || !/^0x[0-9a-fA-F]+$/.test(signature) || !Number.isSafeInteger(timestamp) || Math.abs(Date.now() - timestamp) > 5 * 60_000) return Response.json({ error: "Upload authorization expired or is invalid. Please sign again." }, { status: 401 });
+    if (!isAddress(address)) return Response.json({ error: "Connect a wallet to mint." }, { status: 400 });
     const bytes = new Uint8Array(await file.arrayBuffer());
     const mimeType = contentType(bytes);
     if (!mimeType || (kind === "document" ? mimeType !== "application/pdf" : !imageTypes.includes(mimeType))) return Response.json({ error: kind === "document" ? "Choose a PDF document." : "NFT pictures must be PNG, JPEG, WebP, or GIF images." }, { status: 400 });
-    const digest = createHash("sha256").update(bytes).digest("hex");
-    const message = uploadMessage({ origin, address, digest, kind, name, description, timestamp });
-    const verified = await serverSepoliaClient().verifyMessage({ address, message, signature: signature as Hex, mode: "eoa" });
-    if (!verified) return Response.json({ error: "The upload signature does not match this wallet and file." }, { status: 401 });
+    const limited = await enforceUploadRateLimit(request);
+    if (limited) return limited;
     const fileURI = await pin(new File([bytes], file.name, { type: mimeType }), name, jwt);
     let imageURI = fileURI;
     if (kind === "document") {
