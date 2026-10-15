@@ -1,0 +1,20 @@
+# Credentials and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.keystore
+.vercel/
+
+# Build output, dependencies, and local artifacts
+node_modules/
+.next/
+out/
+cache/
+broadcast/
+coverage/
+*.tsbuildinfo
+.artifacts/
+.DS_Store
+*.log

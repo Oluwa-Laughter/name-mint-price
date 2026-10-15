@@ -1,0 +1,149 @@
+# Name & Mint
+
+Look up an ENS name, explore its profile, and turn an image, profile card, or PDF document into an NFT on Sepolia. Name & Mint combines ENS identity, wallet transactions, server-side Pinata uploads, and a live Chainlink ETH/USD feed in a responsive Next.js app.
+
+**Live app:** [name-and-mint.vercel.app](https://name-and-mint.vercel.app)
+
+## What you can do
+
+| Page       | Features                                                                                                                                                                                          |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ENS        | Resolve a `.eth` name to an address or find an address's verified ENS name. Choose Sepolia or Ethereum mainnet for reads. Update a Sepolia name's ETH address record with an authorized wallet.   |
+| Profile    | View an ENS avatar, description, Twitter record, ETH balance, and its USD equivalent. Continue to NFT Studio to make a profile card.                                                              |
+| NFT Studio | Mint artwork, profile cards, and PDF documents/certificates. Browse the gallery with current owners, ENS names where available, and the original mint payment converted at today's ETH/USD quote. |
+| Live price | View the Chainlink ETH/USD quote, when it was updated, and its age. Convert ETH amounts using the same quote used across the app.                                                                 |
+
+Read features work without connecting a wallet. Transactions use Sepolia, chain ID **11155111**. Mainnet ENS is read-only. On desktop, use an injected browser wallet; on a phone, open the app in your wallet's built-in browser. WalletConnect is not enabled.
+
+Minting a document records the submitted file; it does not independently verify its issuer or authenticity. USD figures for Sepolia ETH are illustrative. A mint's displayed USD amount is its original ETH payment at the current quote, not an NFT appraisal or resale price.
+
+## Repository layout
+
+```text
+contracts/
+  src/                 Solidity contracts and external interfaces
+  scripts/             Separate deployment scripts and ABI exporter
+  test/                Foundry tests and mock price feed
+  deployments/         Public Sepolia address manifest
+  abi/                 Generated JSON and TypeScript ABIs
+frontend/
+  src/app/             Pages and server API routes
+  src/components/      Wallet, ENS, profile, studio, and gallery UI
+  src/lib/contracts/   Frontend ABI copies and deployment addresses
+  tests/               Upload and RPC route tests
+  scripts/             Optional live integration checks
+```
+
+The frontend builds independently of Foundry. Contract ABIs and addresses are copied into it by the ABI export script.
+
+## Run locally
+
+Requirements: Node.js 22 or newer, npm, Python 3, and Foundry for contract development. Initialize the Foundry test dependency after cloning:
+
+```sh
+git submodule update --init --recursive
+```
+
+Start the app from the repository root:
+
+```sh
+cd frontend
+npm ci
+cp .env.example .env.local
+```
+
+Fill in your local configuration, then run:
+
+```sh
+npm run dev
+```
+
+Open [localhost:3000](http://localhost:3000). If `.env.local` already exists, edit it instead of overwriting it. For a local production build, run `npm run build` followed by `npm start`.
+
+Contract development, from the repository root:
+
+```sh
+cd contracts
+forge build
+forge test
+forge fmt --check
+python3 scripts/export_abi.py
+```
+
+The exporter refreshes `contracts/abi/`, `frontend/src/lib/contracts/abi/`, and frontend addresses from `contracts/deployments/sepolia.json`.
+
+## Environment variables
+
+Variable names only are listed here. Local values belong in ignored environment files; hosted values belong in Vercel's environment settings.
+
+### Frontend and server routes
+
+Configure these in `frontend/.env.local` locally:
+
+| Name                       | Where it is used | Purpose                                                                                                       |
+| -------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------- |
+| `PINATA_JWT`               | Server only      | Required to upload NFT files and metadata; use a Pinata JWT with public upload permissions.                   |
+| `SEPOLIA_RPC_URL`          | Server only      | Recommended Sepolia RPC endpoint. A public default is used if omitted.                                        |
+| `MAINNET_RPC_URL`          | Server only      | Optional Ethereum mainnet endpoint for ENS reads. A public default is used if omitted.                        |
+| `NEXT_PUBLIC_IPFS_GATEWAY` | Browser          | Optional public HTTPS gateway hostname or origin for displaying uploaded files. This is public configuration. |
+
+Never put a JWT, private RPC credential, wallet private key, or Etherscan key in a `NEXT_PUBLIC_` variable. The app does not need a deployment private key. Deployed contract addresses are public constants.
+
+### Contract deployment
+
+Configure these in `contracts/.env` when deploying contracts:
+
+| Name                       | Purpose                                                                   |
+| -------------------------- | ------------------------------------------------------------------------- |
+| `SEPOLIA_RPC_URL`          | Sepolia RPC endpoint.                                                     |
+| `ETHERSCAN_API_KEY`        | Source verification.                                                      |
+| `TREASURY_ADDRESS`         | Wallet that receives ClassNFT mint fees when withdrawn.                   |
+| `MINT_FEE_WEI`             | Optional exact mint fee; defaults to zero.                                |
+| `MAX_PRICE_AGE_SECONDS`    | Optional maximum accepted Chainlink quote age; defaults to 7,200 seconds. |
+| `LOCAL_PRICE_FEED_ADDRESS` | Local Anvil testing only; points to a mock or forked feed.                |
+
+Use Foundry's encrypted keystore for the deployment wallet. Treasury and mint fee are immutable after deployment. The frontend reads the deployed fee before minting.
+
+## Sepolia contracts
+
+| Contract                | Purpose                                                                                                    | Verified source                                                                                                                    |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| ClassNFT                | ERC-721 minting, immutable metadata/image URIs, mint payment records, and paginated current-owner gallery. | [0xB80666d3d44165C9Cf2a1c8204C25a489aa6e0e5](https://sepolia.etherscan.io/address/0xB80666d3d44165C9Cf2a1c8204C25a489aa6e0e5#code) |
+| ETHUSDPriceFeed         | Chainlink quote validation, age reporting, and wei-to-USD conversion.                                      | [0x40b91a2b97538B1f9Bd8994EC621E839470b6345](https://sepolia.etherscan.io/address/0x40b91a2b97538B1f9Bd8994EC621E839470b6345#code) |
+| IPFSFileRegistry        | Independent file URI registry; deployed but unused by the current frontend.                                | [0xE846664f9CC57c1a7c7163Ae816Cb1c592B2D3e6](https://sepolia.etherscan.io/address/0xE846664f9CC57c1a7c7163Ae816Cb1c592B2D3e6#code) |
+| Chainlink ETH/USD proxy | Existing upstream feed consumed by ETHUSDPriceFeed.                                                        | [0x694AA1769357215DE4FAC081bf1f309aDC325306](https://sepolia.etherscan.io/address/0x694AA1769357215DE4FAC081bf1f309aDC325306#code) |
+
+The app name does not change the deployed ClassNFT contract name. ENS uses the existing network deployment; resolver addresses are discovered per name. Register test names through the [Sepolia ENS app](https://sepolia.app.ens.domains/). Mainnet and Sepolia names/records are separate.
+
+Each project contract has a separate deployment script under `contracts/scripts/`. See [contract deployment instructions](contracts/README.md) for commands and constructor details. Interfaces and the test mock are not additional Sepolia deployments.
+
+## Uploads, transactions, and prices
+
+NFT Studio accepts JPEG, PNG, WebP, GIF, and PDF files up to **1,000,000 bytes (1 MB)**. Artwork and profile cards require an image; document NFTs require a PDF and receive a generated cover image.
+
+The wallet signs an upload authorization tied to the file hash, title, description, NFT kind, origin, wallet, and timestamp. `/api/upload` validates the signature, expiry, size, and file signature before calling Pinata with the server's JWT. It pins the file and JSON metadata, then returns public `ipfs://` references. The wallet separately confirms the mint transaction, which stores those references on-chain. Uploading alone does not mint an NFT. Profile cards are snapshots; editing ENS later does not change an existing NFT.
+
+The JWT stays on the server. RPC requests use `/api/rpc`, which restricts upstream networks and read/simulation methods; wallets sign and broadcast transactions. Both routes return generic provider failure messages. Wallet authorization and a file-size limit do not provide an account-wide upload quota or rate limit. A cancelled mint can leave an uploaded file pinned, and valid authorizations can be replayed within their five-minute window.
+
+The ETH/USD quote refreshes every 30 seconds. The UI shows its age and disables USD conversions for invalid or stale data. Refreshing the UI reads the feed; it does not cause Chainlink to publish a new round. Conversions use fixed-point bigint arithmetic.
+
+## Checks
+
+From `frontend/`:
+
+```sh
+npm test
+npm run lint
+npx tsc --noEmit
+npm run build
+```
+
+From `contracts/`:
+
+```sh
+forge test
+forge build
+forge fmt --check
+```
+
+With the app running, `npx tsx scripts/check-read-flows.ts` from `frontend/` checks deployed contract reads, the gallery, price, RPC proxy, and mainnet ENS. The optional `check-upload-flow.ts` script makes a real public Pinata upload and checks retrieval; it is excluded from the default tests and sends no mint transaction. Browser-wallet minting and ENS editing require a wallet and a name you control.

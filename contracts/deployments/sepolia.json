@@ -1,0 +1,9 @@
+{
+  "chainId": 11155111,
+  "contracts": {
+    "ClassNFT": "0xB80666d3d44165C9Cf2a1c8204C25a489aa6e0e5",
+    "IPFSFileRegistry": "0xE846664f9CC57c1a7c7163Ae816Cb1c592B2D3e6",
+    "ETHUSDPriceFeed": "0x40b91a2b97538B1f9Bd8994EC621E839470b6345"
+  },
+  "chainlinkEthUsdAggregator": "0x694AA1769357215DE4FAC081bf1f309aDC325306"
+}

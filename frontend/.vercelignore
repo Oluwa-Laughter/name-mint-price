@@ -1,0 +1,10 @@
+.env
+.env.*
+.git
+.next
+node_modules
+.artifacts
+coverage
+*.log
+*.pem
+*.key
