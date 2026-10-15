@@ -15,8 +15,7 @@ contract UpgradeDiamond is Script {
         uint256 action = vm.envUint("UPGRADE_ACTION");
         require(action <= 2, "Action must be Add=0, Replace=1 or Remove=2");
         address facet = vm.envAddress("UPGRADE_FACET_ADDRESS");
-        bytes4[] memory selectors = vm.envBytes4("UPGRADE_SELECTORS", ",");
-        require(selectors.length > 0, "Review selectors before broadcasting");
+        bytes4[] memory selectors = _parseSelectors(vm.envBytes("UPGRADE_SELECTORS", ","));
         address expectedOldFacet = vm.envAddress("UPGRADE_EXPECTED_OLD_FACET");
         for (uint256 i; i < selectors.length; ++i) {
             require(IDiamondLoupe(diamond).facetAddress(selectors[i]) == expectedOldFacet, "Facet mapping changed");
@@ -28,5 +27,14 @@ contract UpgradeDiamond is Script {
         vm.startBroadcast();
         IDiamondCut(diamond).diamondCut(cuts, init, data);
         vm.stopBroadcast();
+    }
+
+    function _parseSelectors(bytes[] memory encoded) internal pure returns (bytes4[] memory selectors) {
+        require(encoded.length > 0, "Review selectors before broadcasting");
+        selectors = new bytes4[](encoded.length);
+        for (uint256 i; i < encoded.length; ++i) {
+            require(encoded[i].length == 4, "Each selector must be exactly 4 bytes");
+            selectors[i] = bytes4(encoded[i]);
+        }
     }
 }
