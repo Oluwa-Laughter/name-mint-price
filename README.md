@@ -12,7 +12,7 @@ Look up an ENS name, explore its profile, and turn an image, profile card, or PD
 | Profile    | View an ENS avatar, description, Twitter record, ETH balance, and its USD equivalent. Continue to NFT Studio to make a profile card.                                                              |
 | NFT Studio | Mint artwork, profile cards, and PDF documents/certificates. Browse the gallery with current owners, ENS names where available, and the original mint payment converted at today's ETH/USD quote. |
 | Smart account | Mint two NFTs from one upload, in one ERC-4337 UserOperation through Pimlico. Request gas sponsorship or pay from the smart account. |
-| Live alerts | Watch new Diamond mint events, with verified ENS names and optional browser notifications. |
+| Live alerts | See new Diamond mint events in an in-app activity feed with verified ENS names, transaction links, and automatic reconnect. |
 | Live price | View the Chainlink ETH/USD quote, when it was updated, and its age. Convert ETH amounts using the same quote used across the app.                                                                 |
 
 Read features work without connecting a wallet. Transactions use Sepolia, chain ID **11155111**. Mainnet ENS is read-only. On desktop, use an injected browser wallet; on a phone, open the app in your wallet's built-in browser. WalletConnect is not enabled.
@@ -173,10 +173,20 @@ Gas sponsorship is requested from Pimlico through `/api/bundler`; the key never 
 
 Sponsorship covers gas, not a nonzero NFT mint fee. If sponsorship is unavailable, the user can explicitly choose to pay gas and fund the displayed smart account with Sepolia ETH. The app saves the signed operation and its hash in this browser before submission; after a timeout or reload, check its receipt or resubmit the identical signed operation instead of creating another batch. Signatures authorize that exact operation; the smart account nonce prevents executing it twice.
 
-**Live alerts** polls the Diamond's `NFTMinted` events every five seconds, waits two block confirmations, deduplicates events, and resolves creator/recipient names with forward-verified ENS reverse records. It catches up from the last processed block after temporary failures while mounted and displays up to 100 events. On opening, it reads 20 recent blocks without generating pop-ups for old events. Two confirmations reduce reorg exposure but are not finality; browser background throttling and chain reorganizations can affect delivery.
+**Live alerts** displays confirmed `NFTMinted` events inside the dApp at `/notifications`—there are no operating-system/browser pop-ups or permission requests. The page polls every five seconds, waits two block confirmations, deduplicates logs, and displays creator/recipient addresses with verified ENS names when available. It reads 40 recent blocks at startup and catches up in **8-block RPC chunks** because larger queries can fail on the deployed Sepolia RPC. Retries keep the last successful block cursor so confirmed events are not skipped. It displays up to 100 events and highlights newly observed activity while the page is open. Two confirmations reduce reorg exposure but are not finality.
 
-Enable browser notifications with the page button; permission is requested only after that click. A small service worker displays local notifications where supported; notification clicks open Live alerts. The page remains useful without notification permission or a connected wallet.
+**These are open-page alerts, not an always-on Push Protocol subscription.** The page must stay open for live updates, although it loads recent events when opened again. A production product would use a durable off-chain event indexer with persisted block cursors, deduplication, confirmation/reorg handling, and a delivery service or Push Protocol inbox that can retain notifications while the user is offline.
 
-**These are open-page alerts, not an always-on push service.** Closing the page stops blockchain polling, and browsers can throttle inactive tabs. A production notification service would run a durable event indexer with a persisted cursor, confirmation/reorg handling and deduplication, then deliver Web Push through stored subscriptions even when the page is closed.
+### Verified sponsored UserOperation (Sepolia)
+
+A real Pimlico-sponsored ERC-4337 UserOperation minted **NFT #1 and NFT #2** in one atomic batch to the same recipient. Both `NFTMinted` events and the successful `UserOperationEvent` are present in the transaction receipt:
+
+- **UserOperation hash:** [`0xc82f6d524a1ee41ec5002463e01ac0dd6ef8b1f1d2e56e62d3f8e390a0015a05`](https://sepolia.etherscan.io/tx/0x47363347a4572efd63e8d467bfd46bd5c16356d413314c2e92c6d15731155ff3#eventlog)
+- **Etherscan transaction:** [View successful batch mint](https://sepolia.etherscan.io/tx/0x47363347a4572efd63e8d467bfd46bd5c16356d413314c2e92c6d15731155ff3).
+- **From:** `0x433702873e33d4846d399a75aaf96eacf181d0b2` — the bundler's transaction sender (not the NFT creator).
+- **To:** `0x0000000071727De22E5E9d8BAf0edAc6f37da032` — the ERC-4337 EntryPoint v0.7, which executes the smart account calls.
+- **Smart account / NFT creator:** `0x2EA06Fba9b8dF9870C2a86429053fBc0311C12c6`.
+- **Who paid gas?** The Pimlico paymaster `0x777777777777AeC03fd955926DbF81597e66834C` sponsored the UserOperation gas; the bundler submitted the outer transaction. The NFT mint fee was zero at the time.
+- **Recipient:** `0xFcb3C3195dFdB51B41bb7F0e659F05028Aa25AC6`.
 
 To run the opt-in live integration check from `frontend/`, use `npx tsx scripts/check-aa-flow.ts --send`. It creates a disposable signer only in memory, sends one sponsored two-mint Sepolia operation to the project owner's recipient wallet, and saves only public receipt evidence in ignored `.artifacts/day4-userop.json`. It uses the deployed server; it never requires a local Pimlico key. This is a real mint, excluded from the default test suite.

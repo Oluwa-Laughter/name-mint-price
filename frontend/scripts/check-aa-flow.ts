@@ -38,7 +38,7 @@ async function main() {
   await bundler.sendUserOperation({ ...signed, entryPointAddress: ENTRY_POINT.address });
   const receipt = await bundler.waitForUserOperationReceipt({ hash, timeout: 180_000, pollingInterval: 4_000 });
   if (!receipt.success) throw new Error(`Batch reverted in ${receipt.receipt.transactionHash}`);
-  const tokens = receipt.logs.filter((log) => log.address.toLowerCase() === CLASSNFT_ADDRESS.toLowerCase()).flatMap((log) => {
+  const tokens = receipt.receipt.logs.filter((log) => log.address.toLowerCase() === CLASSNFT_ADDRESS.toLowerCase()).flatMap((log) => {
     try { return [decodeEventLog({ abi: nftFacetAbi, eventName: "NFTMinted", data: log.data, topics: log.topics }).args.tokenId.toString()]; } catch { return []; }
   });
   if (tokens.length !== 2) throw new Error("The successful operation did not emit exactly two NFTMinted events.");
