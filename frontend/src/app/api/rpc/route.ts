@@ -1,3 +1,4 @@
+import { validMintLogFilter } from "@/lib/server/log-filter";
 import { rpcEndpoint } from "@/lib/server/rpc";
 
 const methods = new Set([
@@ -16,7 +17,7 @@ export async function POST(request: Request) {
     let body: unknown;
     try { body = JSON.parse(text); } catch { return Response.json({ error: "Invalid JSON request." }, { status: 400 }); }
     const calls = Array.isArray(body) ? body : [body];
-    if (!calls.length || calls.length > 20 || calls.some((call) => !call || typeof call !== "object" || !methods.has(call.method) || (call.params !== undefined && !Array.isArray(call.params)))) {
+    if (!calls.length || calls.length > 20 || calls.some((call) => !call || typeof call !== "object" || (!methods.has(call.method) && !(call.method === "eth_getLogs" && validMintLogFilter(call.params, network))) || (call.params !== undefined && !Array.isArray(call.params)))) {
       return Response.json({ error: "Only supported read and simulation methods are allowed." }, { status: 400 });
     }
     const payload = calls.map(({ id, method, params }) => ({ jsonrpc: "2.0", id, method, params: params || [] }));

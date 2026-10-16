@@ -11,6 +11,8 @@ Look up an ENS name, explore its profile, and turn an image, profile card, or PD
 | ENS        | Resolve a `.eth` name to an address or find an address's verified ENS name. Choose Sepolia or Ethereum mainnet for reads. Update a Sepolia name's ETH address record with an authorized wallet.   |
 | Profile    | View an ENS avatar, description, Twitter record, ETH balance, and its USD equivalent. Continue to NFT Studio to make a profile card.                                                              |
 | NFT Studio | Mint artwork, profile cards, and PDF documents/certificates. Browse the gallery with current owners, ENS names where available, and the original mint payment converted at today's ETH/USD quote. |
+| Smart account | Mint two NFTs from one upload, in one ERC-4337 UserOperation through Pimlico. Request gas sponsorship or pay from the smart account. |
+| Live alerts | Watch new Diamond mint events, with verified ENS names and optional browser notifications. |
 | Live price | View the Chainlink ETH/USD quote, when it was updated, and its age. Convert ETH amounts using the same quote used across the app.                                                                 |
 
 Read features work without connecting a wallet. Transactions use Sepolia, chain ID **11155111**. Mainnet ENS is read-only. On desktop, use an injected browser wallet; on a phone, open the app in your wallet's built-in browser. WalletConnect is not enabled.
@@ -30,7 +32,7 @@ frontend/
   src/app/             Pages and server API routes
   src/components/      Wallet, ENS, profile, studio, and gallery UI
   src/lib/contracts/   Frontend ABI copies and deployment addresses
-  tests/               Upload and RPC route tests
+  tests/               Upload, RPC, and account-abstraction policy tests
   scripts/             Optional live integration checks
 ```
 
@@ -78,10 +80,12 @@ Variable names only are listed here. Local values belong in ignored environment 
 
 ### Frontend and server routes
 
-Configure these in `frontend/.env.local` locally. Upload protection uses the existing Vercel project, with no CAPTCHA or extra service keys:
+Configure upload/RPC variables in `frontend/.env.local` locally. Set Pimlico variables only in Vercel environment settings; do not pull that key into local files. Upload protection uses the existing Vercel project, with no CAPTCHA or extra service keys:
 
 | Name                       | Where it is used | Purpose                                                                                                       |
 | -------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------- |
+| `PIMLICO_API_KEY` | Server only, Vercel | Required for the deployed smart-account bundler/paymaster proxy. |
+| `PIMLICO_SPONSORSHIP_POLICY_ID` | Server only, Vercel | Optional sponsorship policy, selected by the server. |
 | `PINATA_JWT`               | Server only      | Required to upload NFT files and metadata; use a Pinata JWT with public upload permissions.                   |
 | `SEPOLIA_RPC_URL`          | Server only      | Recommended Sepolia RPC endpoint. A public default is used if omitted.                                        |
 | `MAINNET_RPC_URL`          | Server only      | Optional Ethereum mainnet endpoint for ENS reads. A public default is used if omitted.                        |
@@ -158,3 +162,21 @@ forge fmt --check
 ```
 
 With the app running, `npx tsx scripts/check-read-flows.ts` from `frontend/` checks deployed contract reads, the gallery, price, RPC proxy, and mainnet ENS. The optional `check-upload-flow.ts` script makes a real public Pinata upload, and checks retrieval; it is excluded from the default tests and sends no mint transaction. Browser-wallet minting and ENS editing require a wallet and a name you control.
+
+## Account abstraction and live alerts (Day 4)
+
+Open **Smart account**, connect an injected wallet, choose a file and two recipients, then select **Upload and mint two NFTs**. Blank recipients mean the connected wallet; ENS inputs resolve on Sepolia. This deliberately creates two NFTs sharing the same metadata. The normal NFT Studio still supports a single mint.
+
+The app uses `permissionless` with viem, the canonical SimpleAccount factory and EntryPoint v0.7. The connected wallet controls a separate smart account. Its `executeBatch` contains exactly two calls to `NFTFacet.mint` on the existing Diamond; both calls execute atomically. The first operation can deploy the smart account through the factory, so no additional application contract deployment is needed. Wallet connection or a network switch can require a separate permission prompt, but the batch itself needs one owner signature.
+
+Gas sponsorship is requested from Pimlico through `/api/bundler`; the key never enters a browser bundle. The proxy fixes the network and EntryPoint, validates the account against the canonical factory and implementation, restricts calldata to two mints to this Diamond, caps gas quantities, and selects any sponsorship policy server-side. Final sponsorship and submission use the existing Vercel rate-limit service. Configure spending/account limits in the Pimlico dashboard as well: a public proxy and IP limits alone do not provide a per-person spending budget.
+
+Sponsorship covers gas, not a nonzero NFT mint fee. If sponsorship is unavailable, the user can explicitly choose to pay gas and fund the displayed smart account with Sepolia ETH. The app saves the signed operation and its hash in this browser before submission; after a timeout or reload, check its receipt or resubmit the identical signed operation instead of creating another batch. Signatures authorize that exact operation; the smart account nonce prevents executing it twice.
+
+**Live alerts** polls the Diamond's `NFTMinted` events every five seconds, waits two block confirmations, deduplicates events, and resolves creator/recipient names with forward-verified ENS reverse records. It catches up from the last processed block after temporary failures while mounted and displays up to 100 events. On opening, it reads 20 recent blocks without generating pop-ups for old events. Two confirmations reduce reorg exposure but are not finality; browser background throttling and chain reorganizations can affect delivery.
+
+Enable browser notifications with the page button; permission is requested only after that click. A small service worker displays local notifications where supported; notification clicks open Live alerts. The page remains useful without notification permission or a connected wallet.
+
+**These are open-page alerts, not an always-on push service.** Closing the page stops blockchain polling, and browsers can throttle inactive tabs. A production notification service would run a durable event indexer with a persisted cursor, confirmation/reorg handling and deduplication, then deliver Web Push through stored subscriptions even when the page is closed.
+
+To run the opt-in live integration check from `frontend/`, use `npx tsx scripts/check-aa-flow.ts --send`. It creates a disposable signer only in memory, sends one sponsored two-mint Sepolia operation to the project owner's recipient wallet, and saves only public receipt evidence in ignored `.artifacts/day4-userop.json`. It uses the deployed server; it never requires a local Pimlico key. This is a real mint, excluded from the default test suite.

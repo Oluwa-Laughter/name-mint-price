@@ -1,7 +1,7 @@
 import { checkRateLimit } from "@vercel/firewall";
 
 /** Shared Vercel counters. Missing rules and provider errors never permit a Pinata upload. */
-export async function enforceUploadRateLimit(request: Request): Promise<Response | null> {
+export async function enforceUploadRateLimit(request: Request, label = "uploads"): Promise<Response | null> {
   try {
     const result = await checkRateLimit("nft-upload", {
       request, timeout: 4000,
@@ -11,7 +11,7 @@ export async function enforceUploadRateLimit(request: Request): Promise<Response
     });
     if (result.error === "not-found") throw new Error("Upload rule is not active");
     if (result.rateLimited || result.error === "blocked") {
-      return Response.json({ error: "Too many uploads. Please wait a minute and try again." }, {
+      return Response.json({ error: `Too many ${label}. Please wait a minute and try again.` }, {
         status: 429, headers: { "Retry-After": "60", "Cache-Control": "no-store" },
       });
     }

@@ -6,7 +6,7 @@ import { Wallet } from "./wallet";
 import { usePrice } from "@/hooks/use-price";
 import { ageLabel, usd } from "@/lib/format";
 
-const routes = [["/ens", "ENS"], ["/profile", "Profile"], ["/studio", "NFT Studio"], ["/price", "Live price"]] as const;
+const routes = [["/ens", "ENS"], ["/profile", "Profile"], ["/studio", "NFT Studio"], ["/price", "Live price"], ["/aa", "Smart account"], ["/notifications", "Live alerts"]] as const;
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);

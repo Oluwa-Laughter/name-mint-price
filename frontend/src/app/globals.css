@@ -117,7 +117,7 @@ fieldset { border:0; margin:0; padding:0; min-width:0; }
 .skip-link { position:fixed; left:12px; top:-80px; z-index:100; padding:12px; background:white; border:2px solid var(--accent); }
 .skip-link:focus { top:12px; }
 .fetching { opacity:.7; }
-@media (max-width:1050px) {
+@media (max-width:1200px) {
   .desktop-nav { display:none; }
   .menu-toggle { display:inline-flex; }
   .mobile-nav { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; padding:0 24px 16px; }
@@ -179,3 +179,7 @@ p { text-wrap:pretty; }
   .header-actions { width:100%; margin-left:0; justify-content:space-between; }
   .wallet-panel { left:0; right:auto; }
 }
+
+.hash-text { overflow-wrap:anywhere; font-family:var(--font-mono), monospace; font-size:0.8rem; }
+.alert-list { list-style:none; padding:0; display:grid; gap:16px; }
+.alert-list > li { border:1px solid var(--line); border-radius:var(--radius); padding:20px; }
