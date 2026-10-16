@@ -31,10 +31,12 @@ export function operationFromCall(call: BundlerCall) {
     const value = op[field];
     if (value === undefined) continue;
     if (typeof value !== "string" || !quantity.test(value) || value.length > 66) throw new Error("Invalid operation gas or nonce.");
-    if (field !== "nonce" && BigInt(value) > (field.includes("Fee") ? 10_000_000_000n : 3_000_000n)) throw new Error("The operation exceeds this app's gas limits.");
+    // Un-deployed SimpleAccount batches can require over 3M call gas and 1M verification gas.
+    // Limit each field and their sum so real Pimlico estimates pass without unbounded sponsorship.
+    if (field !== "nonce" && BigInt(value) > (field.includes("Fee") ? 10_000_000_000n : 5_000_000n)) throw new Error("The operation exceeds this app's gas limits.");
   }
   const totalGas = ["callGasLimit", "verificationGasLimit", "preVerificationGas", "paymasterVerificationGasLimit", "paymasterPostOpGasLimit"].reduce((sum, field) => sum + BigInt(op[field] as string || "0x0"), 0n);
-  if (totalGas > 3_000_000n) throw new Error("The batch exceeds this app’s total gas limit.");
+  if (totalGas > 7_000_000n) throw new Error("The batch exceeds this app's total gas limit.");
   if (op.maxFeePerGas && op.maxPriorityFeePerGas && BigInt(op.maxPriorityFeePerGas as string) > BigInt(op.maxFeePerGas as string)) throw new Error("Invalid gas fees.");
   if (call.method.startsWith("pm_")) {
     if (call.params[2] !== "0xaa36a7") throw new Error("Only Sepolia sponsorship is supported.");

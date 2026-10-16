@@ -16,7 +16,7 @@ function batch(targets: Address[] = calls.map((c) => c.to), values = [0n, 0n], d
   return encodeFunctionData({ abi: simpleBatchAbi, functionName: "executeBatch", args: [targets, values, data] });
 }
 const op = () => ({ sender, callData: batch(), factory: SIMPLE_FACTORY, factoryData: encodeFunctionData({ abi: simpleFactoryAbi, functionName: "createAccount", args: [owner, 0n] }), nonce: "0x0", maxFeePerGas: "0x1", maxPriorityFeePerGas: "0x1" });
-const call = (method = "eth_estimateUserOperationGas", operation = op()) => parseBundlerCall({ jsonrpc: "2.0", id: 1, method, params: [operation, ENTRY_POINT.address, "0xaa36a7", { sponsorshipPolicyId: "attacker-policy" }] });
+const call = (method = "eth_estimateUserOperationGas", operation: Record<string, unknown> = op()) => parseBundlerCall({ jsonrpc: "2.0", id: 1, method, params: [operation, ENTRY_POINT.address, "0xaa36a7", { sponsorshipPolicyId: "attacker-policy" }] });
 const originalFetch = globalThis.fetch;
 const originalEnv = { PIMLICO_API_KEY: process.env.PIMLICO_API_KEY, PIMLICO_SPONSORSHIP_POLICY_ID: process.env.PIMLICO_SPONSORSHIP_POLICY_ID, SEPOLIA_RPC_URL: process.env.SEPOLIA_RPC_URL };
 afterEach(() => {
@@ -46,6 +46,13 @@ test("proxy restricts methods, EntryPoint, chain, gas cost and client sponsorshi
   assert.deepEqual(paymaster.params[3], { sponsorshipPolicyId: "server-policy" });
   const wrongChain = call("pm_getPaymasterData"); wrongChain.params[2] = "0x1";
   assert.throws(() => operationFromCall(wrongChain));
+});
+test("Pimlico's initial account-deployment gas estimate fits bounded sponsorship limits", () => {
+  // Observed on Sepolia when preparing a first sponsored two-mint UserOperation.
+  const estimated = { ...op(), callGasLimit: "0x2f3c27", verificationGasLimit: "0x13cc8c", preVerificationGas: "0xef3b", paymasterVerificationGasLimit: "0xe062", paymasterPostOpGasLimit: "0x1" };
+  assert.doesNotThrow(() => operationFromCall(call("pm_getPaymasterData", estimated)));
+  assert.throws(() => operationFromCall(call("pm_getPaymasterData", { ...estimated, callGasLimit: "0x4c4b41" })), /gas limits/);
+  assert.throws(() => operationFromCall(call("pm_getPaymasterData", { ...estimated, callGasLimit: "0x4c4b40", verificationGasLimit: "0x200000" })), /total gas limit/);
 });
 test("event polling is scoped to this Diamond and bounded block ranges", () => {
   const filter = { address: CLASSNFT_ADDRESS, topics: [MINT_TOPIC], fromBlock: "0x1", toBlock: "0x1f4" };
